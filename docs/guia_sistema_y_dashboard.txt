@@ -1,0 +1,43 @@
+# Guía Completa del Sistema Multiagente y Dashboard
+
+Este documento explica de forma clara y sin tecnicismos complejos cómo funciona la "mente" del sistema de optimización hospitalario y qué información puedes visualizar en la interfaz gráfica (Dashboard).
+
+---
+
+## 1. ¿Cómo funciona la "mente" del sistema? (La Simulación)
+
+El corazón de este proyecto es una simulación basada en **Inteligencia Artificial Distribuida**. En lugar de tener un único programa que decida todo, el sistema se compone de varios "empleados virtuales" independientes llamados **Agentes**, los cuales se comunican por mensajes de texto internos para tomar decisiones.
+
+El ciclo de vida sucede así:
+
+1. **Llega un paciente:** El simulador lee el archivo CSV y genera un nuevo agente (el `PatientAgent`). Este agente despierta y envía un mensaje por la red interna pidiendo ser atendido.
+2. **El Triage evalúa:** El `TriageAgent` lee el mensaje del paciente. Revisa su edad, tiempo de espera acumulado y otras variables del CSV. Con base en eso, le asigna una Prioridad (Crítica, Alta, Media o Baja) y le envía los datos del paciente al Coordinador.
+3. **El Coordinador busca cama:** El `CoordinatorAgent` no sabe quién tiene camas libres, así que usa un modelo de subasta. Envía un mensaje a todos los departamentos (`DepartmentAgents` como Cardiología, Neurología, etc.) preguntando: *"Tengo un paciente de prioridad Alta, ¿quién lo recibe?"*
+4. **Negociación:** Los departamentos revisan cuántos pacientes tienen actualmente. Si están llenos, rechazan al paciente. Si tienen espacio, envían una propuesta indicando qué tan vacíos están.
+5. **Asignación final:** El Coordinador recibe las respuestas, elige al departamento que esté más vacío (para balancear la carga del hospital) y confirma el traslado. El paciente es notificado y su tiempo de espera deja de contar.
+6. **Vigilancia:** Mientras todo esto pasa, un `MonitoringAgent` vigila el tráfico de mensajes. Si nota que todos los departamentos están colapsando, puede generar una alerta global.
+
+---
+
+## 2. ¿Qué muestra el Dashboard de Streamlit?
+
+El Dashboard es la "cara visible" de toda esta operación interna. Está construido como una aplicación web de múltiples pestañas (ubicadas en el menú lateral izquierdo) para que un administrador del hospital pueda monitorear la salud del sistema.
+
+### Pestaña A: Inicio (Welcome)
+Es la página de aterrizaje (`app.py`). Muestra la bienvenida al sistema y explica la navegación. Sirve como presentación profesional de la herramienta.
+
+### Pestaña B: 🔴 Live Monitoring (1_monitoring.py)
+Esta es la vista de "Tiempo Real" que simula lo que está pasando en el hospital *en este instante*.
+- **Métricas de Tarjetas:** Muestra indicadores rápidos de qué tan lleno está cada departamento (ej. Cardiología 85%). Estos números fluctúan para demostrar cómo se vería la pantalla a medida que los agentes negocian camas.
+- **Mapa de Congestión (Gráfico de Barras):** Un gráfico visual e interactivo (usando Plotly) donde puedes ver claramente si hay algún departamento que supera la línea roja de seguridad.
+- **Feed de Mensajes (Log en vivo):** Un historial estilo "Twitter" en la parte inferior, donde aparecen alertas rápidas simuladas, como *"Paciente asignado a Cardiología"* o *"Congestión detectada en General"*.
+
+### Pestaña C: 📊 Analytics (2_analytics.py)
+Esta vista sirve para hacer **auditoría y análisis histórico** *después* de que una simulación ha corrido.
+- **KPIs Reales:** Lee el archivo `summary_report.json` que el sistema generó al finalizar y te muestra el número real de pacientes que los agentes procesaron, cuántos fueron rechazados y cuál fue el tiempo promedio de espera final.
+- **Gráfico de Tendencias:** Una línea de tiempo que te muestra visualmente si los tiempos de espera fueron bajando o subiendo a lo largo de las horas.
+- **Caja Negra (Log de Sistema):** En la parte de abajo de la página, hay una caja de texto con fondo gris que muestra las líneas exactas (el log en crudo) de los mensajes técnicos que los agentes se enviaron durante la simulación. Es muy útil para debuggear.
+
+### Pestaña D: ⚙️ Simulation Control (3_simulation.py)
+Es un panel de configuración "What-If" (¿Qué pasaría si...?). 
+Posee un formulario interactivo donde puedes cambiar las reglas del juego. Por ejemplo, te permite aumentar el número de camas de Cardiología a 50 o aumentar la tasa de llegada de emergencias, para luego enviar esa configuración a los agentes y ver si el hospital sobrevive al nuevo nivel de estrés.

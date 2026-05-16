@@ -1,0 +1,48 @@
+# Funcionamiento del Sistema Multiagente (SMA) Hospitalario
+
+Este documento explica de forma detallada y secuencial cómo funciona por debajo el Sistema Multiagente diseñado para optimizar el flujo de pacientes.
+
+## 1. El Arranque (main.py)
+Todo comienza al ejecutar `main.py`. Este archivo es el "orquestador" de la simulación. 
+Lo primero que hace es instanciar un `DatasetLoader`, el cual lee el archivo CSV con los datos de los pacientes. 
+A continuación, inicializa el corazón de la comunicación: el **MessageBus**, que es una especie de oficina de correos central.
+
+Luego, se instancian los "Agentes Especialistas" (TriageAgent, CoordinatorAgent, MonitoringAgent y los DepartmentAgents) y se conectan al MessageBus. 
+Finalmente, inicia el motor del tiempo (Scheduler) y la simulación arranca.
+
+## 2. El Paso del Tiempo (Scheduler)
+En una simulación, el tiempo no transcurre de forma continua, sino en "ticks" o pasos. 
+Cada *tick* del `Scheduler` equivale (por configuración) a 5 minutos en el hospital.
+Durante cada tick, el Scheduler recorre la lista de todos los agentes activos y les dice: "¡Actúa!". En código, llama a la función `agente.act(current_tick)`.
+
+## 3. Generación de Pacientes (EventGenerator)
+En cada tick, el `EventGenerator` toma pacientes del dataset y crea un **PatientAgent** (Agente Paciente) por cada uno. 
+Una vez creado, el `PatientAgent` despierta y se da cuenta de que es "Nuevo" en el hospital. 
+
+## 4. El Ciclo de Vida y Negociación (Paso a Paso)
+
+### Paso A: Petición de Triage
+Cuando el `PatientAgent` despierta, utiliza el MessageBus para enviar un mensaje FIPA-ACL tipo `REQUEST` dirigido al `TriageAgent`, pidiéndole que evalúe su urgencia.
+
+### Paso B: Clasificación
+En el mismo tick, cuando le toca el turno al `TriageAgent`, este lee su bandeja de entrada. Ve la solicitud del paciente, lee su edad y tiempo de espera, y usando las reglas clínicas (`priority_rules.py`) le asigna un nivel (CRITICAL, HIGH, MEDIUM, LOW).
+Acto seguido, envía un mensaje al paciente diciendo "Fuiste clasificado" y envía otro mensaje tipo `REQUEST` al `CoordinatorAgent` pidiendo que le busquen una cama.
+
+### Paso C: La Subasta (Call For Proposal)
+El `CoordinatorAgent` recibe la petición. En lugar de obligar a un departamento a recibir al paciente, usa un protocolo de mercado: envía un mensaje `CFP` (Llamado a propuestas) a todos los `DepartmentAgents` (Cardiología, General, etc.) preguntándoles: "¿Quién tiene espacio y cuánta carga tienen?".
+
+### Paso D: Propuesta de los Departamentos
+Los `DepartmentAgents` leen el `CFP`. Consultan sus propias reglas (`congestion_rules.py`) y su capacidad actual. 
+- Si están llenos, responden con `REJECT_PROPOSAL`.
+- Si tienen espacio, responden con `PROPOSE`, indicando su nivel de ocupación actual (ej. 50% lleno).
+
+### Paso E: Asignación Final
+El `CoordinatorAgent` evalúa todas las propuestas (`PROPOSE`) recibidas. Elige al departamento que tenga *menor* nivel de ocupación para balancear la carga.
+Envía un `ACCEPT_PROPOSAL` al departamento ganador. El departamento recibe al paciente, aumenta su contador de ocupación y notifica directamente al paciente que ha sido ingresado.
+
+## 5. Salida y Monitoreo
+Cada cierta cantidad de ticks, los pacientes que ya están "EN_TRATAMIENTO" son dados de alta por los `DepartmentAgents`, liberando espacio para que el ciclo de subasta funcione para nuevos pacientes.
+Mientras todo esto ocurre, el `MonitoringAgent` vigila el tráfico global de mensajes para imprimir alertas si todos los departamentos se acercan al 100% de congestión.
+
+## 6. Dashboard
+Al ejecutar `streamlit run dashboard/app.py`, se levanta una interfaz gráfica. En una integración completa, este dashboard lee los logs (`logs/sma_hospital.log`) que generaron los agentes o se conecta a una base de datos local para graficar en tiempo real cómo varían las métricas mientras la simulación descrita arriba sigue su curso.

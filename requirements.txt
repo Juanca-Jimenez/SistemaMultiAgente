@@ -1,5 +1,4 @@
 pandas>=2.0.0
 streamlit>=1.25.0
 plotly>=5.15.0
-sqlalchemy>=2.0.0
-# spade>=3.2.2  # Descomentar si se usa SPADE
+numpy>=1.24.0
